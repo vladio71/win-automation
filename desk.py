@@ -314,9 +314,24 @@ def after_start(desk: Desk, anchor: webview.Window) -> None:
     hk = desk.cfg.get("hotkeys", {})
     overlay_key = str(hk.get("overlay", "pause"))
     end_key = str(hk.get("end_of_day", "ctrl+pause"))
-    keyboard.add_hotkey(overlay_key, Debounced(desk.toggle_overlay))
-    keyboard.add_hotkey(end_key, Debounced(desk.show_end_of_day))
+    bind(overlay_key, Debounced(desk.toggle_overlay))
+    bind(end_key, Debounced(desk.show_end_of_day))
     log.info("hotkeys: overlay=%s end_of_day=%s", overlay_key, end_key)
+
+
+# Ctrl+Pause Windows віддає не як Ctrl + Pause, а як окрему клавішу Break (VK_CANCEL),
+# тому для "ctrl+pause" вішаємо ще й "ctrl+break" і "break". Одна дія за раз завдяки Debounced.
+HOTKEY_ALIASES: dict[str, list[str]] = {
+    "ctrl+pause": ["ctrl+pause", "ctrl+break", "break"],
+}
+
+
+def bind(hotkey: str, action) -> None:
+    for name in HOTKEY_ALIASES.get(hotkey.lower(), [hotkey]):
+        try:
+            keyboard.add_hotkey(name, action)
+        except Exception as e:  # назва невідома цій розкладці: пропускаємо, решта аліасів лишається
+            log.warning("hotkey %s not bound: %s", name, e)
 
 
 def main() -> None:
