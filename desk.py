@@ -23,6 +23,8 @@ from logging.handlers import RotatingFileHandler
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(HERE, "desk.json")
+# Токен окремо від конфіга, бо desk.json у репо, а token.txt у .gitignore
+TOKEN_PATH = os.path.join(HERE, "token.txt")
 STATE_DIR = os.path.join(HERE, "state")
 LOG_PATH = os.path.join(STATE_DIR, "desk.log")
 
@@ -53,6 +55,18 @@ except ImportError as e:
 def load_config() -> dict:
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def load_token() -> str:
+    """AUTOMATION_TOKEN з Vercel, один рядок у token.txt поруч зі скриптом."""
+    try:
+        with open(TOKEN_PATH, "r", encoding="utf-8") as f:
+            token = f.read().strip()
+    except FileNotFoundError:
+        token = ""
+    if not token:
+        log.error("token.txt порожній або відсутній: поклади туди AUTOMATION_TOKEN з Vercel")
+    return token
 
 
 # ---------------------------------------------------------------- вікно "кінець дня" (локальний HTML)
@@ -108,7 +122,7 @@ class Desk:
     def __init__(self, cfg: dict):
         self.cfg = cfg
         self.app_url = str(cfg["app_url"]).rstrip("/")
-        self.headers = {"x-automation-token": str(cfg["token"])}
+        self.headers = {"x-automation-token": load_token()}
         self.overlay: webview.Window | None = None
         self.end_window: webview.Window | None = None
         self.overlay_visible = False

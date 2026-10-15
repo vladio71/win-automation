@@ -20,7 +20,7 @@
 
 1. міграція на Neon: `npx prisma migrate deploy` з `DATABASE_URL` від Neon (як і раніше);
 2. у Vercel → Environment Variables: `AUTOMATION_TOKEN` = довгий випадковий рядок (`openssl rand -hex 24`), передеплой;
-3. той самий рядок у `desk.json` → `token`.
+3. той самий рядок одним рядком у `token.txt` поруч з `desk.py` (файл у `.gitignore`, в репо не йде).
 
 Без токена ендпоінти відповідають 503, з чужим — 401.
 
@@ -32,7 +32,7 @@ Python у PATH. У цій папці:
 pip install -r requirements.txt
 ```
 
-Заповнити `desk.json` (`app_url`, `token`). Потім PowerShell від адміна:
+Створити `token.txt` з токеном. `desk.json` (`app_url`, клавіші) вже заповнений. Потім PowerShell від адміна:
 
 ```
 powershell -ExecutionPolicy Bypass -File .\install.ps1
@@ -49,7 +49,7 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 ## Якщо щось не так
 
 - `state\desk.log`, `state\morning.log`.
-- Оверлей порожній або 503/401: перевір `token` у `desk.json` і `AUTOMATION_TOKEN` на Vercel.
+- Оверлей порожній або 503/401: перевір `token.txt` і `AUTOMATION_TOKEN` на Vercel.
 - Хоткей не ловиться, коли активне вікно запущене від адміна (так працює Windows): клацни в звичайне вікно.
 - Сон замість гібернації і навпаки: `SetSuspendState` робить те, що в системі ввімкнено; `powercfg /h off` вимикає гібернацію.
 - Потрібен WebView2 (є на Windows 11 і на Windows 10 з Edge).

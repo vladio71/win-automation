@@ -30,7 +30,10 @@ if ((Get-Date).Hour -lt $hour) {
 
 # 1. План на сьогодні. Після входу мережа може піднятись не одразу, тому три спроби.
 $appUrl = ([string]$cfg.app_url).TrimEnd('/')
-$headers = @{ 'x-automation-token' = [string]$cfg.token }
+$tokenFile = Join-Path $here 'token.txt'
+$token = if (Test-Path $tokenFile) { (Get-Content $tokenFile -Raw).Trim() } else { '' }
+if (-not $token) { Log 'token.txt missing or empty: put AUTOMATION_TOKEN from Vercel there' }
+$headers = @{ 'x-automation-token' = $token }
 $planned = $false
 for ($try = 1; $try -le 3 -and -not $planned; $try++) {
     try {
