@@ -3,8 +3,8 @@ desk: два хоткеї поверх усього (Windows).
 
   Pause        показати/сховати оверлей: сторінка /mini апки (перший крок, список дня з галочками,
                "Start the day"). Вікно без рамки, поверх усіх вікон, можна тягнути мишею.
-  Ctrl+Pause   кінець дня: вікно з полем "завтра починаю з". Enter -> запис в апку (/api/handoff),
-               закрити Chrome і VS Code, сон. Esc -> нічого не сталось.
+  Ctrl+Pause   кінець дня: вікно з полем "завтра починаю з". Enter -> запис в апку (/api/handoff).
+               Esc -> нічого не сталось. За бажанням (desk.json -> end_of_day) ще закриває програми і присипляє.
 
 Клавіші, розмір оверлею, що закривати і що робити потім - у desk.json поруч.
 Токен апки - у token.txt поруч (у .gitignore).
@@ -96,7 +96,7 @@ END_OF_DAY_HTML = """<!doctype html>
   <div class="today" id="today"></div>
   <div class="label">Завтра починаю з</div>
   <input id="f" maxlength="200" placeholder="одна річ, з якої почнеться ранок (можна порожнє)">
-  <div class="hint">Enter: записати, закрити Chrome і VS Code, сон &nbsp;·&nbsp; Esc: скасувати</div>
+  <div class="hint">Enter: записати &nbsp;·&nbsp; Esc: скасувати</div>
   <div class="err" id="err"></div>
 <script>
   const f = document.getElementById('f');
@@ -253,7 +253,9 @@ class Desk:
         for image in eod.get("close", []):
             subprocess.run(["taskkill", "/IM", image], capture_output=True)
             log.info("closed %s", image)
-        then = str(eod.get("then", "sleep"))
+        then = str(eod.get("then", "none"))
+        if then == "none":
+            return
         time.sleep(6)  # дати програмам закритись
         if then == "sleep":
             subprocess.run(["rundll32.exe", "powrprof.dll,SetSuspendState", "0,1,0"])

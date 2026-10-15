@@ -1,5 +1,5 @@
 {
-  "_note": "app_url без слеша в кінці. Токен (AUTOMATION_TOKEN з Vercel) лежить у token.txt поруч, не тут. Назви клавіш як у бібліотеці keyboard: pause, ctrl+pause, f9, ctrl+alt+space. end_of_day.then: sleep | shutdown | none.",
+  "_note": "app_url без слеша в кінці. Токен (AUTOMATION_TOKEN з Vercel) лежить у token.txt поруч, не тут. Назви клавіш як у бібліотеці keyboard: pause, ctrl+pause, f9, ctrl+alt+space. end_of_day.close: які програми закрити (напр. [\"chrome.exe\", \"Code.exe\"]), then: none | sleep | shutdown.",
   "app_url": "https://study-app-like-notion-with-anki.vercel.app",
   "hotkeys": {
     "overlay": "pause",
@@ -14,10 +14,7 @@
     "hour": 9
   },
   "end_of_day": {
-    "close": [
-      "chrome.exe",
-      "Code.exe"
-    ],
-    "then": "sleep"
+    "close": [],
+    "then": "none"
   }
 }
