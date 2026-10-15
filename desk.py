@@ -7,7 +7,11 @@ desk: два хоткеї поверх усього (Windows).
                закрити Chrome і VS Code, сон. Esc -> нічого не сталось.
 
 Клавіші, розмір оверлею, що закривати і що робити потім - у desk.json поруч.
+Токен апки - у token.txt поруч (у .gitignore).
 Запускається Task Scheduler'ом при вході (install.ps1), без консолі (pythonw). Лог: state\\desk.log.
+
+Вікна створюються при першому натисканні, а не на старті: створене прихованим вікно WebView2 на Windows
+лишалось білим. Щоб webview.start() було з чим стартувати, на старті є одне порожнє вікно 1x1 за екраном.
 
 Залежності: pip install -r requirements.txt   (pywebview, keyboard, requests; на Windows потрібен WebView2,
 він є на Win11 і на Win10 з Edge).
@@ -32,12 +36,14 @@ log = logging.getLogger("desk")
 
 
 def setup_logging() -> None:
-    """Під pythonw немає консолі, тому все у файл, інакше падіння ніхто не побачить."""
+    """Під pythonw немає консолі, тому все у файл, інакше падіння ніхто не побачить.
+    Хендлер на root-логері: помилки pywebview (логер 'pywebview') теж потрапляють сюди."""
     os.makedirs(STATE_DIR, exist_ok=True)
     handler = RotatingFileHandler(LOG_PATH, maxBytes=1_000_000, backupCount=2, encoding="utf-8")
-    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
-    log.setLevel(logging.INFO)
-    log.addHandler(handler)
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    root.addHandler(handler)
 
 
 setup_logging()
@@ -100,7 +106,7 @@ END_OF_DAY_HTML = """<!doctype html>
     f.value = ''; err.textContent = ''; today.textContent = '';
     setTimeout(() => f.focus(), 60);
     pywebview.api.state().then((s) => {
-      if (!s.ok) return;
+      if (!s.ok) { err.textContent = s.error; return; }
       today.textContent = 'Сьогодні ' + s.done + '/' + s.total + (s.allDone ? ' · усе закрито' : '');
     }).catch(() => {});
   }
@@ -127,9 +133,7 @@ class Desk:
         self.end_window: webview.Window | None = None
         self.overlay_visible = False
         self.end_visible = False
-        # evaluate_js чекає, поки сторінка завантажиться; приховане вікно може ще не вантажитись,
-        # тому JS шлемо тільки після події loaded, інакше хоткей зависне назавжди.
-        self.overlay_loaded = False
+        # evaluate_js чекає, поки сторінка завантажиться; шлемо JS тільки після події loaded
         self.end_loaded = False
         self.lock = threading.Lock()
 
@@ -160,32 +164,80 @@ class Desk:
     def toggle_overlay(self) -> None:
         with self.lock:
             if self.overlay is None:
+                self.overlay = self._create_overlay()
+                self.overlay_visible = True
                 return
             if self.overlay_visible:
                 self.overlay.hide()
                 self.overlay_visible = False
                 return
-            if self.overlay_loaded:
-                try:
-                    self.overlay.evaluate_js("location.reload()")  # свіжі галочки, якщо щось міняв в апці
-                except Exception as e:
-                    log.warning("overlay reload: %s", e)
+            try:
+                self.overlay.evaluate_js("location.reload()")  # свіжі галочки, якщо щось міняв в апці
+            except Exception as e:
+                log.warning("overlay reload: %s", e)
             self.overlay.show()
             self.overlay_visible = True
+
+    def _create_overlay(self) -> webview.Window:
+        ov = self.cfg.get("overlay", {})
+        width = int(ov.get("width", 460))
+        height = int(ov.get("height", 640))
+        margin = int(ov.get("margin", 24))
+        screen = webview.screens[0]
+        window = webview.create_window(
+            "desk", url=f"{self.app_url}/mini",
+            width=width, height=height, x=screen.width - width - margin, y=margin + 40,
+            frameless=True, on_top=True, easy_drag=True,
+        )
+
+        def closed() -> None:  # Alt+F4: наступний Pause створить вікно заново
+            with self.lock:
+                self.overlay = None
+                self.overlay_visible = False
+
+        window.events.closed += closed
+        log.info("overlay created")
+        return window
 
     # ---------------------------------------------------------------- кінець дня
 
     def show_end_of_day(self) -> None:
         with self.lock:
-            if self.end_window is None or self.end_visible:
+            if self.end_visible:
                 return
-            if self.end_loaded:  # перший показ: сторінка сама викличе reset() на pywebviewready
+            if self.end_window is None:
+                self.end_window = self._create_end_window()
+                self.end_visible = True
+                return
+            if self.end_loaded:
                 try:
                     self.end_window.evaluate_js("reset()")
                 except Exception as e:
                     log.warning("end-of-day reset: %s", e)
             self.end_window.show()
             self.end_visible = True
+
+    def _create_end_window(self) -> webview.Window:
+        screen = webview.screens[0]
+        window = webview.create_window(
+            "end of day", html=END_OF_DAY_HTML, js_api=EndOfDayApi(self),
+            width=520, height=190, x=int((screen.width - 520) / 2), y=int(screen.height * 0.3),
+            frameless=True, on_top=True, easy_drag=True,
+        )
+
+        def loaded() -> None:
+            self.end_loaded = True
+
+        def closed() -> None:
+            with self.lock:
+                self.end_window = None
+                self.end_visible = False
+                self.end_loaded = False
+
+        window.events.loaded += loaded
+        window.events.closed += closed
+        log.info("end-of-day window created")
+        return window
 
     def hide_end_of_day(self) -> None:
         with self.lock:
@@ -235,49 +287,46 @@ class EndOfDayApi:
         self.desk.hide_end_of_day()
 
 
-def place_windows(desk: Desk) -> None:
-    """Викликається pywebview у своєму потоці після старту GUI: позиція оверлею (правий верхній кут) і хоткеї."""
-    ov = desk.cfg.get("overlay", {})
-    width = int(ov.get("width", 460))
-    margin = int(ov.get("margin", 24))
-    try:
-        screen = webview.screens[0]
-        desk.overlay.move(screen.width - width - margin, margin + 40)
-        desk.end_window.move(int((screen.width - 520) / 2), int(screen.height * 0.3))
-    except Exception as e:
-        log.warning("move windows: %s", e)
+class Debounced:
+    """Хоткей, який не спрацьовує двічі поспіль: деякі клавіші шлють подвійні події."""
 
+    def __init__(self, action):
+        self.action = action
+        self.last_at = 0.0
+
+    def __call__(self) -> None:
+        now = time.monotonic()
+        if now - self.last_at < 0.4:
+            return
+        self.last_at = now
+        try:
+            self.action()
+        except Exception:
+            log.exception("hotkey action failed")
+
+
+def after_start(desk: Desk, anchor: webview.Window) -> None:
+    """Викликається pywebview у своєму потоці після старту GUI: ховаємо вікно-якір, вішаємо хоткеї."""
+    try:
+        anchor.hide()
+    except Exception as e:
+        log.warning("anchor hide: %s", e)
     hk = desk.cfg.get("hotkeys", {})
-    keyboard.add_hotkey(str(hk.get("overlay", "pause")), desk.toggle_overlay)
-    keyboard.add_hotkey(str(hk.get("end_of_day", "ctrl+pause")), desk.show_end_of_day)
-    log.info("hotkeys: overlay=%s end_of_day=%s", hk.get("overlay", "pause"), hk.get("end_of_day", "ctrl+pause"))
+    overlay_key = str(hk.get("overlay", "pause"))
+    end_key = str(hk.get("end_of_day", "ctrl+pause"))
+    keyboard.add_hotkey(overlay_key, Debounced(desk.toggle_overlay))
+    keyboard.add_hotkey(end_key, Debounced(desk.show_end_of_day))
+    log.info("hotkeys: overlay=%s end_of_day=%s", overlay_key, end_key)
 
 
 def main() -> None:
     cfg = load_config()
     desk = Desk(cfg)
-    ov = cfg.get("overlay", {})
-
-    desk.overlay = webview.create_window(
-        "desk", url=f"{desk.app_url}/mini",
-        width=int(ov.get("width", 460)), height=int(ov.get("height", 640)),
-        frameless=True, on_top=True, easy_drag=True, hidden=True,
-    )
-    desk.end_window = webview.create_window(
-        "end of day", html=END_OF_DAY_HTML, js_api=EndOfDayApi(desk),
-        width=520, height=190, frameless=True, on_top=True, easy_drag=True, hidden=True,
-    )
-    def overlay_loaded() -> None:
-        desk.overlay_loaded = True
-
-    def end_loaded() -> None:
-        desk.end_loaded = True
-
-    desk.overlay.events.loaded += overlay_loaded
-    desk.end_window.events.loaded += end_loaded
-
+    # webview.start() вимагає хоч одне вікно: порожнє 1x1 за межами екрана, після старту ховається
+    anchor = webview.create_window("desk-anchor", html="<html></html>", width=1, height=1, x=-4000, y=-4000,
+                                   frameless=True, hidden=True)
     log.info("desk started, pid %s, app %s", os.getpid(), desk.app_url)
-    webview.start(place_windows, desk)
+    webview.start(after_start, (desk, anchor))
 
 
 if __name__ == "__main__":
