@@ -1,6 +1,8 @@
 # win-automation
 
-Два хоткеї поверх усього і ранковий автостарт для study app. Доповнення до `blocker` і `svc`.
+Windows desk tools for my [workflow-automation](https://github.com/vladio71/workflow-automation) app: a global `Pause` hotkey that toggles an always-on-top overlay with today's plan, `Ctrl+Pause` for the end-of-day handoff, and a morning task that asks the app to build the day's plan and opens it in a kiosk Chrome window. Python (pywebview, keyboard) and PowerShell, talks to the app over a token-protected API.
+
+Два хоткеї поверх усього і ранковий автостарт для workflow-automation. Доповнення до `blocker` і `svc`.
 Живе в `C:\repos\win-automation` (шлях до лога в `svc/services.json` розраховує на це).
 
 | Клавіша | Що |
@@ -16,7 +18,7 @@
 
 ## Що потрібно з боку апки
 
-Гілка з `/mini`, `/api/state`, `/api/handoff`, `/api/plan/generate` (див. патч у study-app). Після деплою:
+Гілка з `/mini`, `/api/state`, `/api/handoff`, `/api/plan/generate` (див. патч у workflow-automation). Після деплою:
 
 1. міграція на Neon: `npx prisma migrate deploy` з `DATABASE_URL` від Neon (як і раніше);
 2. у Vercel → Environment Variables: `AUTOMATION_TOKEN` = довгий випадковий рядок (`openssl rand -hex 24`), передеплой;
